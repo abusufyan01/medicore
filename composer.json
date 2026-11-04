@@ -39,7 +39,7 @@
         "vendor/bin/pint"
     ],
     "analyse": [
-        "vendor/bin/phpstan analyse --memory-limit=2G"
+        "vendor/bin/phpstan analyse app --memory-limit=2G"
     ],
         "setup": [
             "composer install",
