@@ -1,9 +1,14 @@
 <?php
 
+use App\Shared\Exceptions\DomainException;
+use App\Shared\Exceptions\ErrorCode;
+use App\Shared\Support\Http\ApiResponse;
 use App\Shared\Support\Http\AssignRequestId;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,7 +20,25 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Runs first on every request, so even early failures carry a request id.
         $middleware->prepend(AssignRequestId::class);
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // The global handler that maps exceptions to the standard error JSON is built in P1-T7.
+        $exceptions->render(function (DomainException $e) {
+            return ApiResponse::error($e->errorCode, $e->getMessage(), $e->fields ?? []);
+        });
+
+        $exceptions->render(function (AuthenticationException $e) {
+            return ApiResponse::error(ErrorCode::Unauthenticated);
+        });
+
+        $exceptions->render(function (ValidationException $e) {
+            /** @var array<string, array<int, string>> $errors */
+            $errors = $e->errors();
+
+            return ApiResponse::error(
+                ErrorCode::ValidationFailed,
+                $e->getMessage(),
+                $errors,
+            );
+        });
     })->create();

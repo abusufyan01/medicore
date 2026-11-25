@@ -12,12 +12,10 @@ use Illuminate\Support\Facades\Route;
 | and it is loaded automatically, so adding a module never edits this file.
 | A future breaking change would add routes/api/v2.php beside it.
 */
+Route::prefix('v1')->group(function (): void {
+    $routeFiles = glob(base_path('routes/api/v1/*.php')) ?: [];
 
-Route::prefix('v1')->name('v1.')->group(function (): void {
-    $files = glob(base_path('routes/api/v1/*.php')) ?: [];
-    sort($files);
-
-    foreach ($files as $file) {
-        require $file;
+    foreach ($routeFiles as $routeFile) {
+        require $routeFile;
     }
 });
