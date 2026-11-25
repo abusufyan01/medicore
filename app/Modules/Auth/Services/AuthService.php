@@ -50,6 +50,13 @@ class AuthService
             throw new DomainException(ErrorCode::Unauthenticated, 'Invalid credentials.');
         }
 
+        if (! $user->hasVerifiedEmail()) {
+            throw new DomainException(
+                ErrorCode::Forbidden,
+                'Please verify your email address before logging in.'
+            );
+        }
+
         $user->failed_login_count = 0;
         $user->locked_until = null;
         $user->last_login_at = now();

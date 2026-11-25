@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Modules\Auth\Models\User;
 use App\Shared\Exceptions\ErrorCode;
 use App\Shared\Support\Http\ApiResponse;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -26,6 +28,14 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)
                 ->by($email.'|'.$request->ip())
                 ->response(fn () => ApiResponse::error(ErrorCode::RateLimited));
+        });
+
+        ResetPassword::createUrlUsing(function (object $notifiable, string $token): string {
+            /** @var string $frontendUrl */
+            $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+            $email = $notifiable instanceof User ? $notifiable->email : '';
+
+            return rtrim($frontendUrl, '/').'/reset-password?token='.$token.'&email='.urlencode($email);
         });
     }
 }
