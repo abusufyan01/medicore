@@ -20,6 +20,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string $name
  * @property string $email
  * @property string|null $phone
+ * @property Carbon|null $email_verified_at
  * @property bool $is_active
  * @property bool $must_change_password
  * @property int $failed_login_count
