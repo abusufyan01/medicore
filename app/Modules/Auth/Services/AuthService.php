@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Auth\Services;
 
 use App\Modules\Auth\Models\User;
+use App\Shared\Audit\AuditLogger;
 use App\Shared\Exceptions\DomainException;
 use App\Shared\Exceptions\ErrorCode;
 use Illuminate\Http\Request;
@@ -16,6 +17,10 @@ class AuthService
     private const MAX_FAILED_ATTEMPTS = 5;
 
     private const LOCKOUT_MINUTES = 15;
+
+    public function __construct(
+        private readonly AuditLogger $auditLogger,
+    ) {}
 
     public function login(string $email, string $password, Request $request): User
     {
@@ -47,6 +52,14 @@ class AuthService
 
             $user->save();
 
+            $this->auditLogger->log(
+                event: 'login_failed',
+                auditable: $user,
+                auditableId: $user->id,
+                newValues: ['failed_login_count' => $attempts],
+                userId: $user->id,
+            );
+
             throw new DomainException(ErrorCode::Unauthenticated, 'Invalid credentials.');
         }
 
@@ -67,6 +80,13 @@ class AuthService
         if ($request->hasSession()) {
             $request->session()->regenerate();
         }
+
+        $this->auditLogger->log(
+            event: 'login',
+            auditable: $user,
+            auditableId: $user->id,
+            userId: $user->id,
+        );
 
         return $user->load('roles.permissions');
     }

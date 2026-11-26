@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Auth\Models;
 
 use App\Modules\Access\Models\Role;
+use App\Shared\Audit\Auditable;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,6 +30,9 @@ use Laravel\Sanctum\HasApiTokens;
  */
 class User extends Authenticatable implements MustVerifyEmail
 {
+    /** @use HasFactory<UserFactory> */
+    use Auditable, HasApiTokens, HasFactory, Notifiable, SoftDeletes;
+
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
