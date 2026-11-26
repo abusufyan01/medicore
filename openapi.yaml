@@ -1,0 +1,614 @@
+openapi: 3.1.0
+info:
+  title: MediCore Hospital Management System API
+  version: 1.0.0
+  description: >
+    Modular monolith REST API for MediCore HMS (Phase 1: Health, Sanctum SPA Authentication,
+    RBAC User Administration, System Settings, and Append-Only Audit Logs).
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+tags:
+  - name: System
+  - name: Auth
+  - name: Users
+  - name: Settings
+  - name: Audit Logs
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: laravel_session
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, fields, request_id]
+          properties:
+            code:
+              type: string
+              example: VALIDATION_FAILED
+            message:
+              type: string
+              example: The given data was invalid.
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+            request_id:
+              type: string
+              nullable: true
+              example: 0405c194-97d5-4cee-bd3f-eadb7a304388
+
+    PaginationMeta:
+      type: object
+      required: [page, per_page, total, last_page]
+      properties:
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 15
+        total:
+          type: integer
+          example: 42
+        last_page:
+          type: integer
+          example: 3
+
+    Permission:
+      type: object
+      required: [id, name, group]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: patients.view
+        group:
+          type: string
+          example: patients
+
+    Role:
+      type: object
+      required: [id, name, label, is_system]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: admin
+        label:
+          type: string
+          example: Administrator
+        is_system:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+
+    User:
+      type: object
+      required: [id, name, email, is_active, must_change_password, roles]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        must_change_password:
+          type: boolean
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+
+    AuthenticatedUser:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          required: [permissions]
+          properties:
+            permissions:
+              type: array
+              items:
+                type: string
+
+    AuditLog:
+      type: object
+      required: [id, event, auditable_type, created_at]
+      properties:
+        id:
+          type: integer
+        event:
+          type: string
+          example: updated
+        auditable_type:
+          type: string
+        auditable_id:
+          type: string
+          nullable: true
+        old_values:
+          type: object
+          nullable: true
+        new_values:
+          type: object
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        user:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            email:
+              type: string
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Service liveness check
+      responses:
+        '200':
+          description: Service healthy
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with email and password (SPA cookie session)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Authenticated user with roles and permissions
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Locked, deactivated, or unverified account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Current user profile
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: End current session
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        '204':
+          description: Logged out
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a 60-minute single-use password reset link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Neutral confirmation message
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Complete password reset with token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, email, password, password_confirmation]
+              properties:
+                token:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                password_confirmation:
+                  type: string
+      responses:
+        '200':
+          description: Password reset succeeded
+        '422':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Self-register a patient portal account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, phone, password, password_confirmation]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                password:
+                  type: string
+                password_confirmation:
+                  type: string
+      responses:
+        '201':
+          description: Account created; verification email sent
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/verify-email/{id}/{hash}:
+    get:
+      tags: [Auth]
+      summary: Verify patient email via signed link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: hash
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Email verified
+        '403':
+          description: Invalid signature or hash
+
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      summary: Resend email verification link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Neutral confirmation message
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List users (requires users.view)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated list of users
+    post:
+      tags: [Users]
+      summary: Create staff user and send temporary password (requires users.create)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, roles]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                  nullable: true
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: User created
+
+  /users/{user}:
+    get:
+      tags: [Users]
+      summary: Show single user (requires users.view)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User details
+        '404':
+          description: User not found
+    patch:
+      tags: [Users]
+      summary: Update user profile fields (requires users.update)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Updated user
+
+  /users/{user}/status:
+    patch:
+      tags: [Users]
+      summary: Activate or deactivate user (requires users.deactivate)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties:
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Status updated
+        '409':
+          description: Cannot deactivate last active administrator
+
+  /users/{user}/roles:
+    put:
+      tags: [Users]
+      summary: Replace user roles (requires roles.manage)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties:
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Roles synchronized
+        '409':
+          description: Cannot demote last active administrator
+
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Fetch all system settings (requires settings.view)
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Key-value settings map
+    put:
+      tags: [Settings]
+      summary: Update system settings (requires settings.manage)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settings]
+              properties:
+                settings:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Updated settings map
+
+  /audit-logs:
+    get:
+      tags: [Audit Logs]
+      summary: Filter and paginate append-only audit logs (requires audit_logs.view)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+        - name: event
+          in: query
+          schema:
+            type: string
+        - name: auditable_type
+          in: query
+          schema:
+            type: string
+        - name: auditable_id
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Paginated audit log entries
