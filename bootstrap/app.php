@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CheckPermission;
 use App\Shared\Exceptions\DomainException;
 use App\Shared\Exceptions\ErrorCode;
 use App\Shared\Support\Http\ApiResponse;
@@ -21,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Runs first on every request, so even early failures carry a request id.
         $middleware->prepend(AssignRequestId::class);
         $middleware->statefulApi();
+        $middleware->alias([
+            'permission' => CheckPermission::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (DomainException $e) {

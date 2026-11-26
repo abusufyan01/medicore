@@ -5,4 +5,4 @@ declare(strict_types=1);
 use App\Shared\Support\Http\HealthController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/health', HealthController::class)->name('health');
+Route::get('/health', HealthController::class)->name('v1.health');
