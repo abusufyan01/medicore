@@ -1,10 +1,10 @@
 <?php
 
-use App\Shared\Support\Http\AssignRequestId;
 use App\Http\Middleware\CheckPermission;
 use App\Shared\Exceptions\DomainException;
 use App\Shared\Exceptions\ErrorCode;
 use App\Shared\Support\Http\ApiResponse;
+use App\Shared\Support\Http\AssignRequestId;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -74,12 +74,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (ModelNotFoundException|NotFoundHttpException $e, Request $request) {
             return response()->json([
                 'error' => [
-                    'code' => 'NOT_FOUND',
-                    'message' => 'The requested resource was not found.',
+                    'code' => 'CSRF_MISMATCH',
+                    'message' => 'CSRF token mismatch. Refresh /sanctum/csrf-cookie and retry.',
                     'fields' => (object) [],
                     'request_id' => $request->header('X-Request-Id'),
                 ],
-            ], 404);
+            ], 419);
         });
 
         $exceptions->render(function (ThrottleRequestsException $e) {

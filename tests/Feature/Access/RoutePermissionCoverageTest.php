@@ -11,14 +11,8 @@ use Illuminate\Support\Facades\Route as RouteFacade;
 
 uses(RefreshDatabase::class);
 
-/**
- * Public endpoints that intentionally do not require authentication or permission middleware.
- *
- * @return list<string>
- */
-function publicApiPaths(): array
-{
-    return [
+it('enforces auth:sanctum and permission middleware on every protected v1 route', function () {
+    $publicPaths = [
         'api/v1/health',
         'api/v1/auth/login',
         'api/v1/auth/forgot-password',
@@ -27,22 +21,12 @@ function publicApiPaths(): array
         'api/v1/auth/verify-email/{id}/{hash}',
         'api/v1/auth/resend-verification',
     ];
-}
 
-/**
- * Self-service authenticated endpoints available to any logged-in user regardless of role.
- *
- * @return list<string>
- */
-function selfServiceAuthenticatedPaths(): array
-{
-    return [
+    $selfServicePaths = [
         'api/v1/auth/me',
         'api/v1/auth/logout',
     ];
-}
 
-it('enforces auth:sanctum and permission middleware on every protected v1 route', function () {
     $routes = collect(RouteFacade::getRoutes()->getRoutes())
         ->filter(fn (Route $route): bool => str_starts_with($route->uri(), 'api/v1/'));
 
@@ -51,47 +35,69 @@ it('enforces auth:sanctum and permission middleware on every protected v1 route'
     foreach ($routes as $route) {
         $uri = $route->uri();
 
-        if (in_array($uri, publicApiPaths(), true)) {
+        if (in_array($uri, $publicPaths, true)) {
             continue;
         }
 
         $middlewares = $route->gatherMiddleware();
 
-        expect($middlewares)->toContain('auth:sanctum');
+        expect(in_array('auth:sanctum', $middlewares, true))
+            ->toBeTrue("Route [{$uri}] is missing auth:sanctum middleware.");
 
-        if (in_array($uri, selfServiceAuthenticatedPaths(), true)) {
+        if (in_array($uri, $selfServicePaths, true)) {
             continue;
         }
 
         $hasPermissionGate = collect($middlewares)
             ->contains(fn (string $m): bool => str_starts_with($m, 'permission:'));
 
-        expect($hasPermissionGate)->toBeTrue();
+        expect($hasPermissionGate)
+            ->toBeTrue("Route [{$uri}] is missing a permission:<name> middleware gate.");
     }
 });
 
-it('returns 401 for guests, 403 for unauthorized roles, and 200 for authorized roles', function () {
+it('enforces the Phase 1 role matrix across guest and all five system roles', function () {
     $this->seed(DatabaseSeeder::class);
 
-    // 1. Guest -> 401
-    $this->getJson('/api/v1/access/check')
-        ->assertUnauthorized()
-        ->assertJsonPath('error.code', 'UNAUTHENTICATED');
+    $createUserWithRole = function (string $roleName): User {
+        $user = User::factory()->create();
+        $role = Role::where('name', $roleName)->firstOrFail();
+        $user->roles()->attach($role);
 
-    // 2. Patient (lacks roles.view) -> 403
-    $patient = User::factory()->create();
-    $patient->roles()->attach(Role::where('name', 'patient')->firstOrFail());
+        return $user;
+    };
 
-    $this->actingAs($patient)
-        ->getJson('/api/v1/access/check')
-        ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+    $roles = [
+        'admin' => User::where('email', config('hms.admin_email'))->firstOrFail(),
+        'receptionist' => $createUserWithRole('receptionist'),
+        'doctor' => $createUserWithRole('doctor'),
+        'accountant' => $createUserWithRole('accountant'),
+        'patient' => $createUserWithRole('patient'),
+    ];
 
-    // 3. Admin (has roles.view) -> 200
-    $admin = User::where('email', config('hms.admin_email'))->firstOrFail();
+    $matrix = [
+        '/api/v1/users' => ['admin'],
+        '/api/v1/settings' => ['admin'],
+        '/api/v1/audit-logs' => ['admin', 'accountant'],
+    ];
 
-    $this->actingAs($admin)
-        ->getJson('/api/v1/access/check')
-        ->assertOk()
-        ->assertJsonPath('data.authorized', true);
-});
+    foreach ($matrix as $endpoint => $allowedRoles) {
+        // Guest -> 401
+        $this->app['auth']->forgetGuards();
+        $this->getJson($endpoint)
+            ->assertUnauthorized()
+            ->assertJsonPath('error.code', 'UNAUTHENTICATED');
+
+        // All 5 system roles -> 200 if allowed, 403 otherwise
+        foreach ($roles as $roleName => $user) {
+            $response = $this->actingAs($user)->getJson($endpoint);
+
+            if (in_array($roleName, $allowedRoles, true)) {
+                $response->assertOk();
+            } else {
+                $response->assertForbidden()
+                    ->assertJsonPath('error.code', 'FORBIDDEN');
+            }
+        }
+    }
+}); 
