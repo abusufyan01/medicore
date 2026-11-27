@@ -6,6 +6,8 @@ namespace App\Modules\Patients\Services;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Patients\Models\Patient;
+use App\Shared\Exceptions\DomainException;
+use App\Shared\Exceptions\ErrorCode;
 use App\Shared\Sequences\SequenceGenerator;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -69,6 +71,13 @@ class PatientService
      */
     public function create(array $data): Patient
     {
+        $confirmDuplicate = filter_var($data['confirm_duplicate'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        unset($data['confirm_duplicate']);
+
+        if (! $confirmDuplicate) {
+            $this->ensureNoDuplicate($data);
+        }
+
         return DB::transaction(function () use ($data): Patient {
             $patient = new Patient($data);
             $patient->patient_number = $this->sequenceGenerator->next('patient');
@@ -77,6 +86,38 @@ class PatientService
 
             return $patient;
         });
+    }
+
+    /**
+     * Check for potential duplicates matching (phone + date_of_birth) OR (name + date_of_birth).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function ensureNoDuplicate(array $data): void
+    {
+        $name = mb_strtolower(trim((string) ($data['name'] ?? '')));
+        $phone = trim((string) ($data['phone'] ?? ''));
+        $dob = (string) ($data['date_of_birth'] ?? '');
+
+        $duplicates = Patient::query()
+            ->whereDate('date_of_birth', $dob)
+            ->where(function (Builder $query) use ($phone, $name): void {
+                $query->where('phone', $phone)
+                    ->orWhereRaw('LOWER(TRIM(name)) = ?', [$name]);
+            })
+            ->get(['id', 'patient_number', 'name', 'phone', 'date_of_birth']);
+
+        if ($duplicates->isNotEmpty()) {
+            $matches = $duplicates->map(
+                fn (Patient $p): string => "{$p->patient_number} ({$p->name}, {$p->phone})"
+            )->all();
+
+            throw new DomainException(
+                ErrorCode::DuplicatePatient,
+                'A potential duplicate patient record already exists. Pass confirm_duplicate=true to create anyway.',
+                ['duplicates' => $matches]
+            );
+        }
     }
 
     /**

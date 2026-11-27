@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Modules\Access\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;

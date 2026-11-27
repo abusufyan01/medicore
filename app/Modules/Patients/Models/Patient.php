@@ -6,6 +6,8 @@ namespace App\Modules\Patients\Models;
 
 use App\Modules\Auth\Models\User;
 use App\Shared\Audit\Auditable;
+use App\Shared\Exceptions\DomainException;
+use App\Shared\Exceptions\ErrorCode;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -23,6 +25,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $national_id
  * @property string|null $blood_group
  * @property string|null $address
+ * @property string|null $guardian_name
+ * @property string|null $guardian_phone
  * @property string|null $emergency_contact_name
  * @property string|null $emergency_contact_phone
  * @property string|null $allergies
@@ -37,6 +41,7 @@ class Patient extends Model
 {
     use Auditable, SoftDeletes;
 
+    /** @var list<string> */
     protected $fillable = [
         'patient_number',
         'user_id',
@@ -48,6 +53,8 @@ class Patient extends Model
         'national_id',
         'blood_group',
         'address',
+        'guardian_name',
+        'guardian_phone',
         'emergency_contact_name',
         'emergency_contact_phone',
         'allergies',
@@ -56,6 +63,9 @@ class Patient extends Model
         'is_active',
     ];
 
+    /**
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [
@@ -63,6 +73,16 @@ class Patient extends Model
             'date_of_birth' => 'date',
             'is_active' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::forceDeleting(function (): void {
+            throw new DomainException(
+                ErrorCode::Forbidden,
+                'Patient records cannot be permanently deleted. Deactivate the patient instead.'
+            );
+        });
     }
 
     /**
