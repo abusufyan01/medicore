@@ -13,7 +13,7 @@ class SystemDefaultsSeeder extends Seeder
     public function run(): void
     {
         $sequences = [
-            ['name' => 'patient', 'prefix' => 'PAT', 'padding' => 6, 'include_year' => true],
+            ['name' => 'patient', 'prefix' => 'P', 'padding' => 6, 'include_year' => true],
             ['name' => 'appointment', 'prefix' => 'APT', 'padding' => 6, 'include_year' => true],
             ['name' => 'consultation', 'prefix' => 'CON', 'padding' => 6, 'include_year' => true],
             ['name' => 'prescription', 'prefix' => 'RX', 'padding' => 6, 'include_year' => true],

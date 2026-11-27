@@ -56,41 +56,32 @@ it('enforces auth:sanctum and permission middleware on every protected v1 route'
     }
 });
 
-it('enforces the Phase 1 role matrix across guest and all five system roles', function () {
+it('enforces the role matrix across guest and all five system roles', function () {
     $this->seed(DatabaseSeeder::class);
 
-    $createUserWithRole = function (string $roleName): User {
-        $user = User::factory()->create();
-        $role = Role::where('name', $roleName)->firstOrFail();
-        $user->roles()->attach($role);
-
-        return $user;
-    };
-
-    $roles = [
-        'admin' => User::where('email', config('hms.admin_email'))->firstOrFail(),
-        'receptionist' => $createUserWithRole('receptionist'),
-        'doctor' => $createUserWithRole('doctor'),
-        'accountant' => $createUserWithRole('accountant'),
-        'patient' => $createUserWithRole('patient'),
-    ];
+    $roles = ['admin', 'receptionist', 'doctor', 'accountant', 'patient'];
+    $usersByRole = [];
+    foreach ($roles as $roleName) {
+        $usersByRole[$roleName] = $roleName === 'admin'
+            ? User::where('email', config('hms.admin_email'))->firstOrFail()
+            : createUserWithRole($roleName);
+    }
 
     $matrix = [
         '/api/v1/users' => ['admin'],
         '/api/v1/settings' => ['admin'],
-        '/api/v1/audit-logs' => ['admin', 'accountant'],
+        '/api/v1/audit-logs' => ['admin'],
+        '/api/v1/patients' => ['admin', 'receptionist', 'doctor', 'patient'],
     ];
 
     foreach ($matrix as $endpoint => $allowedRoles) {
-        // Guest -> 401
-        $this->app['auth']->forgetGuards();
+        // Guest -> always 401
         $this->getJson($endpoint)
             ->assertUnauthorized()
             ->assertJsonPath('error.code', 'UNAUTHENTICATED');
 
-        // All 5 system roles -> 200 if allowed, 403 otherwise
-        foreach ($roles as $roleName => $user) {
-            $response = $this->actingAs($user)->getJson($endpoint);
+        foreach ($roles as $roleName) {
+            $response = $this->actingAs($usersByRole[$roleName])->getJson($endpoint);
 
             if (in_array($roleName, $allowedRoles, true)) {
                 $response->assertOk();
@@ -100,4 +91,4 @@ it('enforces the Phase 1 role matrix across guest and all five system roles', fu
             }
         }
     }
-}); 
+});
