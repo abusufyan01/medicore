@@ -6,8 +6,10 @@ namespace App\Providers;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Doctors\Models\Department;
+use App\Modules\Doctors\Models\Doctor;
 use App\Modules\Doctors\Models\Specialization;
 use App\Modules\Doctors\Policies\DepartmentPolicy;
+use App\Modules\Doctors\Policies\DoctorPolicy;
 use App\Modules\Doctors\Policies\SpecializationPolicy;
 use App\Modules\Patients\Models\Patient;
 use App\Modules\Patients\Policies\PatientPolicy;
@@ -66,6 +68,11 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(
             Specialization::class,
             SpecializationPolicy::class,
+        );
+
+        Gate::policy(
+            Doctor::class,
+            DoctorPolicy::class,
         );
     }
 }
