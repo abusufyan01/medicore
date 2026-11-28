@@ -71,6 +71,7 @@ class PatientService
      */
     public function create(array $data): Patient
     {
+        $data = $this->normalizeAttributes($data);
         $confirmDuplicate = filter_var($data['confirm_duplicate'] ?? false, FILTER_VALIDATE_BOOLEAN);
         unset($data['confirm_duplicate']);
 
@@ -125,10 +126,32 @@ class PatientService
      */
     public function update(Patient $patient, array $data): Patient
     {
+        $patient->fill($this->normalizeAttributes($data));
         $patient->fill($data);
         $patient->save();
 
         return $patient;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeAttributes(array $data): array
+    {
+        foreach (['name', 'phone', 'national_id', 'guardian_name', 'guardian_phone'] as $field) {
+            if (isset($data[$field]) && is_string($data[$field])) {
+                $trimmed = trim($data[$field]);
+                $data[$field] = $trimmed === '' ? null : $trimmed;
+            }
+        }
+
+        if (isset($data['email']) && is_string($data['email'])) {
+            $trimmedEmail = strtolower(trim($data['email']));
+            $data['email'] = $trimmedEmail === '' ? null : $trimmedEmail;
+        }
+
+        return $data;
     }
 
     public function updateStatus(Patient $patient, bool $isActive): Patient

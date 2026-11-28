@@ -14,9 +14,10 @@ tags:
   - name: Users
   - name: Settings
   - name: Audit Logs
+  - name: Patients
 
 components:
-  securitySchemes:
+  securitySchemes:  
     cookieAuth:
       type: apiKey
       in: cookie
@@ -185,9 +186,403 @@ components:
               type: string
             email:
               type: string
+Patient:
+      type: object
+      required: [id, patient_number, name, phone, date_of_birth, age, gender, is_active]
+      properties:
+        id:
+          type: integer
+        patient_number:
+          type: string
+          example: P-2026-000001
+        user_id:
+          type: integer
+          nullable: true
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        date_of_birth:
+          type: string
+          format: date
+        age:
+          type: integer
+        gender:
+          type: string
+          enum: [male, female, other]
+        national_id:
+          type: string
+          nullable: true
+        blood_group:
+          type: string
+          enum: [A+, A-, B+, B-, AB+, AB-, O+, O-]
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        guardian_name:
+          type: string
+          nullable: true
+          description: Required when patient age is under 18
+        guardian_phone:
+          type: string
+          nullable: true
+          description: Required when patient age is under 18
+        emergency_contact_name:
+          type: string
+          nullable: true
+        emergency_contact_phone:
+          type: string
+          nullable: true
+        allergies:
+          type: string
+          nullable: true
+        chronic_conditions:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+      PatientTimeline:
+      type: object
+      required: [patient_id, patient_number, events, counts]
+      properties:
+        patient_id:
+          type: integer
+        patient_number:
+          type: string
+        events:
+          type: array
+          items:
+            type: object
+        counts:
+          type: object
+          properties:
+            appointments:
+              type: integer
+            consultations:
+              type: integer
+            prescriptions:
+              type: integer
+            invoices:
+              type: integer
+            admissions:
+              type: integer
 
 paths:
-  /health:
+
+ /patients:
+    get:
+      tags: [Patients]
+      summary: List and search patients scoped by caller role (requires patients.view)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Search by patient_number, name, phone, national_id, or email
+          schema:
+            type: string
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated list of patients
+    post:
+      tags: [Patients]
+      summary: Register a new patient (requires patients.create)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, phone, date_of_birth, gender]
+              properties:
+                user_id:
+                  type: integer
+                  nullable: true
+                name:
+                  type: string
+                phone:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                  nullable: true
+                date_of_birth:
+                  type: string
+                  format: date
+                gender:
+                  type: string
+                  enum: [male, female, other]
+                national_id:
+                  type: string
+                  nullable: true
+                blood_group:
+                  type: string
+                  enum: [A+, A-, B+, B-, AB+, AB-, O+, O-]
+                  nullable: true
+                address:
+                  type: string
+                  nullable: true
+                guardian_name:
+                  type: string
+                  nullable: true
+                guardian_phone:
+                  type: string
+                  nullable: true
+                emergency_contact_name:
+                  type: string
+                  nullable: true
+                emergency_contact_phone:
+                  type: string
+                  nullable: true
+                allergies:
+                  type: string
+                  nullable: true
+                chronic_conditions:
+                  type: string
+                  nullable: true
+                notes:
+                  type: string
+                  nullable: true
+                confirm_duplicate:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Patient registered with P-YYYY-NNNNNN number
+        '409':
+          description: Potential duplicate patient detected (DUPLICATE_PATIENT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation failed (including missing guardian fields under 18)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    /patients/{patient}:
+    get:
+      tags: [Patients]
+      summary: View a single patient record (requires patients.view and policy access)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: patient
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Patient details
+        '403':
+          description: Cross-patient or unassigned access denied
+        '404':
+          description: Patient not found
+    patch:
+      tags: [Patients]
+      summary: Update patient details (requires patients.update)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - name: patient
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                  nullable: true
+                date_of_birth:
+                  type: string
+                  format: date
+                gender:
+                  type: string
+                  enum: [male, female, other]
+                national_id:
+                  type: string
+                  nullable: true
+                blood_group:
+                  type: string
+                  nullable: true
+                address:
+                  type: string
+                  nullable: true
+                guardian_name:
+                  type: string
+                  nullable: true
+                guardian_phone:
+                  type: string
+                  nullable: true
+                allergies:
+                  type: string
+                  nullable: true
+                chronic_conditions:
+                  type: string
+                  nullable: true
+                notes:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Updated patient record
+        '403':
+          description: Forbidden
+
+    /patients/{patient}/status:
+    patch:
+      tags: [Patients]
+      summary: Deactivate or reactivate a patient record (requires patients.update)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - name: patient
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties:
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Patient status updated
+
+    /patients/link-account:
+    post:
+      tags: [Patients]
+      summary: Link logged-in patient portal user to clinical record via patient number and DOB
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patient_number, date_of_birth]
+              properties:
+                patient_number:
+                  type: string
+                  example: P-2026-000001
+                date_of_birth:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Portal user linked to patient record
+        '409':
+          description: User account already linked
+        '422':
+          description: No eligible unlinked record matched
+        '429':
+          description: Too many link attempts
+
+    /patients/{patient}/invite:
+    post:
+      tags: [Patients]
+      summary: Provision a patient portal user and send invitation email (requires patients.update)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - name: patient
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  nullable: true
+      responses:
+        '201':
+          description: Portal account created and invitation sent
+        '409':
+          description: Patient already has a linked portal account
+
+    /patients/{patient}/timeline:
+    get:
+      tags: [Patients]
+      summary: Retrieve patient clinical timeline (requires patients.view and policy access)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: patient
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Clinical timeline events and counts
+        '403':
+          description: Forbidden
+
+    /health:
     get:
       tags: [System]
       summary: Service liveness check
@@ -575,6 +970,8 @@ paths:
       responses:
         '200':
           description: Updated settings map
+
+
 
   /audit-logs:
     get:
