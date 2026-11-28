@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Doctors\Models\Department;
+use App\Modules\Doctors\Models\Specialization;
+use App\Modules\Doctors\Policies\DepartmentPolicy;
+use App\Modules\Doctors\Policies\SpecializationPolicy;
 use App\Modules\Patients\Models\Patient;
 use App\Modules\Patients\Policies\PatientPolicy;
 use App\Shared\Exceptions\ErrorCode;
@@ -52,6 +56,16 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(
             Patient::class,
             PatientPolicy::class,
+        );
+
+        Gate::policy(
+            Department::class,
+            DepartmentPolicy::class,
+        );
+
+        Gate::policy(
+            Specialization::class,
+            SpecializationPolicy::class,
         );
     }
 }
