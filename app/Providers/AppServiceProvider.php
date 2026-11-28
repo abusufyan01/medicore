@@ -33,6 +33,14 @@ class AppServiceProvider extends ServiceProvider
                 ->response(fn () => ApiResponse::error(ErrorCode::RateLimited));
         });
 
+        RateLimiter::for('patient-link', function (Request $request): Limit {
+            $userId = $request->user()->id ?? 'guest';
+
+            return Limit::perMinutes(15, 5)
+                ->by($userId.'|'.$request->ip())
+                ->response(fn () => ApiResponse::error(ErrorCode::RateLimited));
+        });
+
         ResetPassword::createUrlUsing(function (object $notifiable, string $token): string {
             /** @var string $frontendUrl */
             $frontendUrl = config('app.frontend_url', 'http://localhost:3000');

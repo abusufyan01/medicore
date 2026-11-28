@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')
     ->prefix('patients')
     ->group(function (): void {
+        Route::post('/link-account', [PatientController::class, 'linkAccount'])
+            ->middleware(['permission:patients.view', 'throttle:patient-link'])
+            ->name('v1.patients.link-account');
+
         Route::get('/', [PatientController::class, 'index'])
             ->middleware('permission:patients.view')
             ->name('v1.patients.index');
@@ -27,4 +31,12 @@ Route::middleware('auth:sanctum')
         Route::patch('/{patient}/status', [PatientController::class, 'updateStatus'])
             ->middleware('permission:patients.update')
             ->name('v1.patients.status');
+
+        Route::post('/{patient}/invite', [PatientController::class, 'invite'])
+            ->middleware('permission:patients.update')
+            ->name('v1.patients.invite');
+
+        Route::get('/{patient}/timeline', [PatientController::class, 'timeline'])
+            ->middleware('permission:patients.view')
+            ->name('v1.patients.timeline');
     });
